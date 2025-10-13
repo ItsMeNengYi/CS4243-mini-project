@@ -60,20 +60,23 @@ def img_preprocessing(img):
 
 # Example usage
 def main():
-    data = []
-    
-    # Loop through all png in train/
-    for (root,dirs,files) in os.walk('train/',topdown=True):
-        for file in files:
-            if file.endswith('.png'):
-                img_path = os.path.join(root, file)
-                img = cv2.imread(img_path)
-                processed_img = img_preprocessing(img)
-                ground_truth = img_path.split("-")[0].split("/")[-1] 
-                prediction = "Example Prediction"  # Placeholder
-                data.append(DataObject(img, processed_img, ground_truth, prediction))
 
-    data_previewer(data)
+    if 'data' not in st.session_state:
+        st.session_state.data = []
+        data = st.session_state.data
+
+        # Loop through all png in train/
+        for (root,dirs,files) in os.walk('train/',topdown=True):
+            for file in files:
+                if file.endswith('.png'):
+                    img_path = os.path.join(root, file)
+                    img = cv2.imread(img_path)
+                    processed_img = img_preprocessing(img)
+                    ground_truth = img_path.split("-")[0].split("/")[-1] 
+                    prediction = "Example Prediction"  # Placeholder
+                    data.append(DataObject(img, processed_img, ground_truth, prediction))
+
+    data_previewer(st.session_state.data)
 
 if __name__ == "__main__":
     main()
