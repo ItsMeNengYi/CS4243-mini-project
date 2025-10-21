@@ -1,0 +1,1 @@
+Download Data from here: https://github.com/AakashKumarNain/CaptchaCracker/raw/master/captcha_images_v2.zip
