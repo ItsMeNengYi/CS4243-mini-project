@@ -39,16 +39,16 @@ def main():
                         data.append(DataObject(img, processed_img, num_chars, char_images, ground_truth, prediction))
                         continue
 
-        #             # Correct seperated
-        #             for i in range(len(ground_truth)):
-        #                 k = ground_truth[i]
-        #                 char_dict[k].append(char_images[i])
-        # # --- 4. Save each image to PNG ---
-        # for k, img_list in char_dict.items():
-        #     for idx, img in enumerate(img_list):
-        #         filename = f"{k}_{idx:05d}.png"  # e.g., a_0000.png
-        #         path = os.path.join(char_dir, filename)
-        #         cv2.imwrite(path, img)
+                    # Correct seperated
+                    for i in range(len(ground_truth)):
+                        k = ground_truth[i]
+                        char_dict[k].append(char_images[i])
+         # --- 4. Save each image to PNG ---
+        for k, img_list in char_dict.items():
+            for idx, img in enumerate(img_list):
+                filename = f"{k}_{idx:05d}.png"  # e.g., a_0000.png
+                path = os.path.join(char_dir, filename)
+                cv2.imwrite(path, img)
         print(f"Wrong count: {wrong_count}")
     data_previewer(st.session_state.data)
 
