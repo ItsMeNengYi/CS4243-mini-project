@@ -46,11 +46,12 @@ def data_previewer(data, batch_size=30):
                 cols2[j].image(char_rgb, caption=f"Truth: {item.ground_truth[j] if j < len(item.ground_truth) else 'N/A'} | Pred: {item.predictions[j] if j < len(item.predictions) else 'N/A'}")
 
             # Compact text info
-            pred_str = ''.join(item.predictions)
-            st.markdown(f"**Ground Truth:** {item.ground_truth} | **Prediction:** {pred_str}")
+            st.markdown(
+                f"**Ground Truth:** {item.ground_truth} | **Prediction:** {"".join(item.predictions)}"
+            )
             st.markdown("---")  # separator
 
-    # Load more button a
+    # Load more button
     if items_to_show < len(data):
         if st.button("⬇️ Load more"):
             st.session_state.loaded += batch_size
@@ -63,22 +64,17 @@ def preprocessing_remove_lines(img) -> np.ndarray:
     lines = cv2.merge([lines, lines, lines])
     processed = img + lines
 
-    # Convert to float for computation
-    img = img.astype(float)
-    
-    # Compute local mean for each channel using a 3x3 filter
-    avg_img = np.zeros_like(img)
-    for c in range(3):
-        avg_img[..., c] = uniform_filter(processed[..., c], size=3, mode='reflect')
-    
-    # Create mask for black pixels
     mask_black = np.all(img == 0, axis=-1)
+    
+    # Compute 3x3 minimum for each channel
+    kernel = np.ones((3, 3), np.uint8)
+    min_img = np.stack([cv2.erode(processed[..., c], kernel) for c in range(3)], axis=-1)
 
-    # Replace black pixels with local averages
-    img[mask_black] = avg_img[mask_black]
+    # Replace black pixels with neighborhood minima
+    result = img.copy()
+    result[mask_black] = min_img[mask_black]
 
-    # Clip and convert back
-    return np.clip(img, 0, 255).astype(np.uint8)
+    return result
 
 def show_img(img: np.ndarray, title=""):
     # If image has 2 dimensions → grayscale
