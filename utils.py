@@ -46,10 +46,8 @@ def data_previewer(data, batch_size=30):
                 cols2[j].image(char_rgb, caption=f"Truth: {item.ground_truth[j] if j < len(item.ground_truth) else 'N/A'} | Pred: {item.predictions[j] if j < len(item.predictions) else 'N/A'}")
 
             # Compact text info
-            st.markdown(
-                f"**Ground Truth:** {item.ground_truth} | "
-                f"**Prediction:** {"".join(item.predictions)}"
-            )
+            pred_str = ''.join(item.predictions)
+            st.markdown(f"**Ground Truth:** {item.ground_truth} | **Prediction:** {pred_str}")
             st.markdown("---")  # separator
 
     # Load more button a
