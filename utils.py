@@ -8,11 +8,11 @@ from sklearn.preprocessing import StandardScaler
 from scipy.ndimage import uniform_filter
 
 class DataObject:
-    def __init__(self, img, processed_img, number_of_characters, list_of_character_images, ground_truth, prediction):
+    def __init__(self, img, processed_img, number_of_characters, list_of_character_images, ground_truth, predictions):
         self.img = img
         self.processed_img = processed_img
         self.ground_truth = ground_truth
-        self.prediction = prediction
+        self.predictions = predictions
         self.number_of_characters = number_of_characters
         self.character_images = list_of_character_images
 
@@ -20,7 +20,7 @@ class DataObject:
         self.predictions = predictions
     
 
-def data_previewer(data, batch_size=20):
+def data_previewer(data, batch_size=30):
     if "loaded" not in st.session_state:
         st.session_state.loaded = batch_size
 
@@ -39,14 +39,16 @@ def data_previewer(data, batch_size=20):
             processed_rgb = cv2.cvtColor(item.processed_img, cv2.COLOR_BGR2RGB)
             cols[1].image(processed_rgb, caption="Processed", width='content')
 
+
+            cols2 = st.columns(len(item.character_images))
             for j, char_img in enumerate(item.character_images):
                 char_rgb = cv2.cvtColor(char_img, cv2.COLOR_BGR2RGB)
-                st.image(char_rgb, caption=f"Char {j+1}")
+                cols2[j].image(char_rgb, caption=f"Truth: {item.ground_truth[j] if j < len(item.ground_truth) else 'N/A'} | Pred: {item.predictions[j] if j < len(item.predictions) else 'N/A'}")
 
             # Compact text info
             st.markdown(
                 f"**Ground Truth:** {item.ground_truth} | "
-                f"**Prediction:** {item.prediction}"
+                f"**Prediction:** {"".join(item.predictions)}"
             )
             st.markdown("---")  # separator
 
@@ -312,7 +314,58 @@ def mean_hue(img):
     grey = np.mean(img,axis=2)
     return np.sum(np.where(grey!=255, hsv[:,:,0],0)) / np.sum(np.where(grey!=255, 1,0))
 
+def process_character_image(img):
+    # --- Convert to grayscale ---
+    gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
+    
+    # --- Invert so character = white (255), background = black (0) ---
+    gray = 255 - gray
+    
+    # --- Threshold to make binary ---
+    _, binary = cv2.threshold(gray, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU)
+    
+    # --- Find bounding box of character ---
+    coords = cv2.findNonZero(binary)
+    x, y, w, h = cv2.boundingRect(coords)
+    
+    # --- Crop + 3px padding ---
+    pad = 3
+    x1 = max(x - pad, 0)
+    y1 = max(y - pad, 0)
+    x2 = min(x + w + pad, binary.shape[1])
+    y2 = min(y + h + pad, binary.shape[0])
+    cropped = binary[y1:y2, x1:x2]
+    
+    # Below: Pad or crop all letters to the same 36*36 square (while avoiding stretching proportions)
+    # --- Create black background ---
+    target_size = 42
+    canvas = np.zeros((target_size, target_size), dtype=np.uint8)
+    
+    # --- If cropped image is larger than 32x32, center crop it ---
+    h, w = cropped.shape
+    if h > target_size or w > target_size:
+        # Center crop
+        start_y = max((h - target_size) // 2, 0)
+        start_x = max((w - target_size) // 2, 0)
+        end_y = start_y + target_size
+        end_x = start_x + target_size
+        cropped = cropped[start_y:end_y, start_x:end_x]
+        h, w = cropped.shape
+    
+    # --- Compute top-left position to center the image ---
+    y_offset = (target_size - h) // 2
+    x_offset = (target_size - w) // 2
+    
+    # --- Paste cropped image onto canvas ---
+    canvas[y_offset:y_offset + h, x_offset:x_offset + w] = cropped
 
+    return canvas
+
+def preprocess(captcha_img: np.ndarray) -> list[np.ndarray]:
+    processed_img = preprocessing_remove_lines(captcha_img)
+    _, char_images = preprocessing_split_by_characters(processed_img)
+    char_images = [process_character_image(ci) for ci in char_images]
+    return char_images
 # ------DEPRECATED FUNCTIONS------
 # def emphasize_spikes(signal, w=11):
 #     """
