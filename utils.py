@@ -58,6 +58,7 @@ def data_previewer(data, batch_size=30):
             st.session_state.loaded += batch_size
             st.rerun()
 
+
 def preprocessing_remove_lines(img) -> np.ndarray: 
     
     img_grey = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
@@ -207,7 +208,7 @@ def segment_by_color(
     Returns:
         (character_count, list_of_character_images)
     """
-    # --- calculated min samples pixel count -- 
+    # --- calculate min samples pixel count -- 
     max_char_count, allowance = 8, 4
     grey = np.mean(img, axis = 2)
     db_min_samples = (np.sum(np.where(grey == 255, 0, 1)) // max_char_count ) // allowance
@@ -232,9 +233,6 @@ def segment_by_color(
     hues = hsv[y_coords, x_coords, 0].astype(np.float32) / 180.0  # normalize hue to [0,1]
     hue_x = np.cos(2 * np.pi * hues)
     hue_y = np.sin(2 * np.pi * hues)
-
-    # normalise everything
-    values = hsv[y_coords, x_coords, 1].astype(np.float32)
     
     # --- 4. Combine features: spatial + color ---
     features = np.column_stack([
@@ -274,12 +272,19 @@ def segment_by_color(
         cluster_img[cluster_mask == 255] = img[cluster_mask == 255]
 
         char_images.append(cluster_img)
+        char_bboxes[0].append(x_min) 
+        char_bboxes[1].append(x_max)
+
+    # --- 8. sort clusters ---
+    if char_bboxes:
+        sorted_idx = np.argsort(char_bboxes[0])
+        char_images = [char_images[i] for i in sorted_idx]
 
     fin_images = char_images
 
     if not visualise:
         return len(fin_images), fin_images
-    # --- 12. Visualise clustering ---
+    # --- 9. Visualise clustering ---
     cluster_colors = {
         -1: 'black',  # noise
         0: 'red',
@@ -347,50 +352,56 @@ def process_character_image(img):
     gray = 255 - gray
     
     # --- Threshold to make binary ---
-    _, binary = cv2.threshold(gray, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU)
+    #_, binary = cv2.threshold(gray, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU)
     
     # --- Find bounding box of character ---
-    coords = cv2.findNonZero(binary)
+    coords = cv2.findNonZero(gray)
     x, y, w, h = cv2.boundingRect(coords)
     
     # --- Crop + 3px padding ---
     pad = 3
     x1 = max(x - pad, 0)
     y1 = max(y - pad, 0)
-    x2 = min(x + w + pad, binary.shape[1])
-    y2 = min(y + h + pad, binary.shape[0])
-    cropped = binary[y1:y2, x1:x2]
+    x2 = min(x + w + pad, gray.shape[1])
+    y2 = min(y + h + pad, gray.shape[0])
+    cropped = gray[y1:y2, x1:x2]
+
+    # --- Normalize brightness: stretch intensity range to full 0–255 ---
+    min_val, max_val = np.min(cropped), np.max(cropped)
+    if max_val > min_val:  # avoid divide-by-zero if image is uniform
+        cropped = (cropped - min_val) * (255.0 / (max_val - min_val))
+        cropped = np.clip(cropped, 0, 255).astype(np.uint8)
     
-    # Below: Pad or crop all letters to the same 36*36 square (while avoiding stretching proportions)
-    # --- Create black background ---
+    # --- Target canvas and padding ---
     target_size = 42
+    pad = 3
+    available_size = target_size - 2 * pad  # 38×38 drawable area
+
+    h, w = cropped.shape
+    scale = min(available_size / h, available_size / w)  # scale to fit within 38×38
+
+    # --- Resize with preserved aspect ratio ---
+    new_w, new_h = int(w * scale), int(h * scale)
+    resized = cv2.resize(cropped, (new_w, new_h), interpolation=cv2.INTER_AREA if scale < 1 else cv2.INTER_CUBIC)
+
+    # --- Create blank 42×42 black background ---
     canvas = np.zeros((target_size, target_size), dtype=np.uint8)
     
-    # --- If cropped image is larger than 32x32, center crop it ---
-    h, w = cropped.shape
-    if h > target_size or w > target_size:
-        # Center crop
-        start_y = max((h - target_size) // 2, 0)
-        start_x = max((w - target_size) // 2, 0)
-        end_y = start_y + target_size
-        end_x = start_x + target_size
-        cropped = cropped[start_y:end_y, start_x:end_x]
-        h, w = cropped.shape
-    
-    # --- Compute top-left position to center the image ---
-    y_offset = (target_size - h) // 2
-    x_offset = (target_size - w) // 2
-    
-    # --- Paste cropped image onto canvas ---
-    canvas[y_offset:y_offset + h, x_offset:x_offset + w] = cropped
+    # --- Center the character ---
+    y_offset = (target_size - new_h) // 2
+    x_offset = (target_size - new_w) // 2
+    canvas[y_offset:y_offset + new_h, x_offset:x_offset + new_w] = resized
 
     return canvas
 
-def preprocess(captcha_img: np.ndarray) -> list[np.ndarray]:
-    processed_img = preprocessing_remove_lines(captcha_img)
-    _, char_images = preprocessing_split_by_characters(processed_img)
-    char_images = [process_character_image(ci) for ci in char_images]
-    return char_images
+def split_into_char_images(img):
+    img = preprocessing_remove_lines(img) # Remove lines
+    _, char_images = preprocessing_split_by_characters(img) # Split chars
+    processed_char_images = []
+    for char_img in char_images:
+        processed_char_images.append(process_character_image(char_img)) 
+    return processed_char_images
+
 # ------DEPRECATED FUNCTIONS------
 # def emphasize_spikes(signal, w=11):
 #     """

@@ -2,7 +2,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 import torch
 
-from utils import preprocess
+from utils import split_into_char_images
 # Add your Neural Network here (if using NN)
 char_classes = {
     "0": 0,
@@ -91,7 +91,7 @@ class Model(nn.Module):
 
 
 def infer(net, captcha):
-    char_images = preprocess(captcha)
+    char_images = split_into_char_images(captcha)
     predictions = []
     net.to(device)
     with torch.no_grad():
