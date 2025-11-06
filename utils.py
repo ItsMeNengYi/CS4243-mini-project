@@ -69,8 +69,8 @@ def preprocessing_remove_lines(img) -> np.ndarray:
     mask_black = np.all(img == 0, axis=-1)
     
     # Compute 3x3 minimum for each channel
-    kernel = np.ones((3, 3), np.uint8) 
-    # kernel = cv2.getStructuringElement(cv2.MORPH_CROSS, (3, 3)) # cross-shaped kernel, no corners
+    # kernel = np.ones((3, 3), np.uint8) 
+    kernel = cv2.getStructuringElement(cv2.MORPH_CROSS, (3, 3)) # cross-shaped kernel, no corners
     min_img = np.stack([cv2.erode(processed[..., c], kernel) for c in range(3)], axis=-1)
 
     # Replace black pixels with neighborhood minima
