@@ -61,16 +61,16 @@ class Model(nn.Module):
             nn.Conv2d(1, 32, 3, padding=1), nn.BatchNorm2d(32), nn.ReLU(),
             nn.Conv2d(32, 32, 3, padding=1), nn.BatchNorm2d(32), nn.ReLU(),
             nn.MaxPool2d(2),
-            nn.Dropout(0.1),
+            nn.Dropout(0.05),
 
             nn.Conv2d(32, 64, 3, padding=1), nn.BatchNorm2d(64), nn.ReLU(),
             nn.Conv2d(64, 64, 3, padding=1), nn.BatchNorm2d(64), nn.ReLU(),
             nn.MaxPool2d(2),
-            nn.Dropout(0.2),
+            nn.Dropout(0.15),
 
             nn.Conv2d(64, 128, 3, padding=1), nn.BatchNorm2d(128), nn.ReLU(),
             nn.MaxPool2d(2),
-            nn.Dropout(0.3),
+            nn.Dropout(0.25),
         )
 
         # --- Automatically compute flattened feature size ---
@@ -79,7 +79,7 @@ class Model(nn.Module):
         self.classifier = nn.Sequential(
             nn.Linear(self._to_linear, 256),  # adapt based on your input size
             nn.ReLU(),
-            nn.Dropout(0.4),
+            nn.Dropout(0.3),
             nn.Linear(256, num_classes)
         )
 
@@ -115,17 +115,23 @@ def count_params(net, trainable=False):
 
 
 def is_char_correct_with_allowance(input, truth):
-    similars = [["o", "0"], 
+    similars = [["o", "0", "d", "q"], 
                ["1", "l", "i"],
                ["9", "q"],
                ["b", "6"],
                ["2", "z"],
-               ["5", "s"]]
+               ["u", "v"],
+               ["e", "m"],
+               ["m", "3"],
+               ["7", "1"]]
+
+    result = input == truth
+    
     for group in similars:
         if truth in group:
-            return input in group
+            result = result or (input in group)
 
-    return input == truth
+    return result
 
 def check_correctness(predictions, ground_truth, with_allowance=False):
     if len(predictions) != len(ground_truth):

@@ -24,7 +24,7 @@ def main():
         wrong_count = 0
         images_count = 0
         # Loop through all png in train/
-        for (root,dirs,files) in os.walk('clean_train_data/',topdown=True):
+        for (root,dirs,files) in os.walk('test/',topdown=True):
             for file in tqdm(files, desc="Loading images"):
                 if file.endswith('.png'):
                     if file[1] == "_":
@@ -48,7 +48,7 @@ def main():
                             data.append(DataObject(img, processed_img, num_chars, char_images, ground_truth, predictions))
                         continue
                     
-
+        print(f"Images count: {images_count}")
         print(f"Wrong count: {wrong_count}")
     data_previewer(st.session_state.data)
 
