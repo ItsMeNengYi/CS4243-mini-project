@@ -46,8 +46,9 @@ def data_previewer(data, batch_size=30):
                 cols2[j].image(char_rgb, caption=f"Truth: {item.ground_truth[j] if j < len(item.ground_truth) else 'N/A'} | Pred: {item.predictions[j] if j < len(item.predictions) else 'N/A'}")
 
             # Compact text info
+            pred_string = "".join(item.predictions)
             st.markdown(
-                f"**Ground Truth:** {item.ground_truth} | **Prediction:** {"".join(item.predictions)}"
+                f"**Ground Truth:** {item.ground_truth} | **Prediction:** {pred_string}"
             )
             st.markdown("---")  # separator
 
@@ -58,21 +59,42 @@ def data_previewer(data, batch_size=30):
             st.rerun()
 
 def preprocessing_remove_lines(img) -> np.ndarray: 
+    
     img_grey = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
     lines = np.where(img_grey == 0, 255, 0).astype(np.uint8)
     # Expand lines to 3 channels
     lines = cv2.merge([lines, lines, lines])
-    processed = img + lines
+    processed = np.clip(img + lines, 0, 255).astype(np.uint8)
 
     mask_black = np.all(img == 0, axis=-1)
     
     # Compute 3x3 minimum for each channel
-    kernel = np.ones((3, 3), np.uint8)
+    kernel = np.ones((3, 3), np.uint8) 
+    # kernel = cv2.getStructuringElement(cv2.MORPH_CROSS, (3, 3)) # cross-shaped kernel, no corners
     min_img = np.stack([cv2.erode(processed[..., c], kernel) for c in range(3)], axis=-1)
 
     # Replace black pixels with neighborhood minima
     result = img.copy()
     result[mask_black] = min_img[mask_black]
+    
+    """
+    # --- CV2 INPAINT METHOD ---
+    # Convert to grayscale
+    gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
+    
+    # Create a mask for black pixels (since lines are black)
+    # Adjust threshold if lines aren't perfectly black
+    mask = cv2.inRange(gray, 0, 1)
+    
+    # Inpaint (remove black lines and fill with nearby pixels)
+    result = cv2.inpaint(img, mask, inpaintRadius=1, flags=cv2.INPAINT_TELEA)
+
+    # Create a mask for pixels that are nearly white across all channels
+    near_white_mask = np.all(result > 240, axis=-1)
+    
+    # Set those pixels to pure white
+    result[near_white_mask] = [255, 255, 255]
+    """
 
     return result
 
