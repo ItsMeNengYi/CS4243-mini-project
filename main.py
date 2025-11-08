@@ -5,7 +5,7 @@ import streamlit as st
 import torch
 from tqdm import tqdm
 
-from utils import data_previewer, DataObject, preprocessing_remove_lines, preprocessing_split_by_characters, process_character_image
+from utils import data_previewer, DataObject, split_into_char_images, preprocessing_remove_lines
 from model import Model, infer, check_correctness
 
 char_dir = 'chars_train_data/'
@@ -26,7 +26,7 @@ def main():
         images_count = 0
         # Loop through all png in train/
         for (root,dirs,files) in os.walk('test/',topdown=True):
-            for file in tqdm(files, desc="Loading images"):
+            for file in tqdm(files[:100], desc="Loading images"):
                 if file.endswith('.png'):
                     if file[1] == "_":
                         os.remove(os.path.join(root, file))
@@ -36,8 +36,7 @@ def main():
                     img_path = os.path.join(root, file)
                     img = cv2.imread(img_path)
                     processed_img = preprocessing_remove_lines(img)
-                    num_chars, char_images = preprocessing_split_by_characters(processed_img)
-                    char_images = [process_character_image(ci) for ci in char_images]
+                    char_images = split_into_char_images(img)
                     ground_truth = img_path.split("-")[0].split("/")[-1] 
                     
                     predictions = infer(net, img)
@@ -50,7 +49,7 @@ def main():
                             wrong_count_with_allowance += 1
                             
                         if len(ground_truth) == len(char_images):
-                            data.append(DataObject(img, processed_img, num_chars, char_images, ground_truth, predictions))
+                            data.append(DataObject(img, processed_img, len(char_images), char_images, ground_truth, predictions))
                         continue
                     
         print(f"Images count: {images_count}")
