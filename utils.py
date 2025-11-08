@@ -7,6 +7,7 @@ from sklearn.cluster import DBSCAN
 from sklearn.preprocessing import StandardScaler
 from scipy.ndimage import uniform_filter
 
+
 class DataObject:
     def __init__(self, img, processed_img, number_of_characters, list_of_character_images, ground_truth, predictions):
         self.img = img
@@ -42,8 +43,23 @@ def data_previewer(data, batch_size=30):
 
             cols2 = st.columns(len(item.character_images))
             for j, char_img in enumerate(item.character_images):
+                pred = item.predictions[j] if j < len(item.predictions) else 'N/A'
+                truth = item.ground_truth[j] if j < len(item.ground_truth) else 'N/A'
+                if pred == truth:
+                    border_color = [0, 255, 0]
+                elif check_correctness(pred, truth, with_allowance=True):
+                    border_color = [255, 255, 0]
+                elif pred == "N/A" or pred != truth:
+                    border_color = [255, 0, 0]
                 char_rgb = cv2.cvtColor(char_img, cv2.COLOR_BGR2RGB)
-                cols2[j].image(char_rgb, caption=f"Truth: {item.ground_truth[j] if j < len(item.ground_truth) else 'N/A'} | Pred: {item.predictions[j] if j < len(item.predictions) else 'N/A'}")
+                border_width = 10
+                img_with_border = cv2.copyMakeBorder(
+                    char_rgb,
+                    border_width, border_width, border_width, border_width,
+                    cv2.BORDER_CONSTANT,
+                    value=border_color
+                )
+                cols2[j].image(img_with_border, caption=f"Truth: {truth} | Pred: {pred}")
 
             # Compact text info
             pred_string = "".join(item.predictions)
@@ -388,6 +404,37 @@ def split_into_char_images(img):
     for char_img in char_images:
         processed_char_images.append(process_character_image(char_img)) 
     return processed_char_images
+
+def check_correctness(predictions, ground_truth, with_allowance=False):
+    if len(predictions) != len(ground_truth):
+        return False
+    for p, t in zip(predictions, ground_truth):
+        if with_allowance:
+            if not is_char_correct_with_allowance(p, t):
+                return False
+        else:
+            if p != t:
+                return False
+    return True
+
+def is_char_correct_with_allowance(input, truth):
+    similars = [["o", "0", "d", "q"], 
+               ["1", "l", "i"],
+               ["9", "q"],
+               ["b", "6"],
+               ["2", "z"],
+               ["u", "v"],
+               ["e", "m"],
+               ["m", "3"],
+               ["7", "1"]]
+
+    result = input == truth
+    
+    for group in similars:
+        if truth in group:
+            result = result or (input in group)
+
+    return result
 
 # ------DEPRECATED FUNCTIONS------
 # def emphasize_spikes(signal, w=11):

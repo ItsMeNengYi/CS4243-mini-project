@@ -25,7 +25,7 @@ def main():
         images_count = 0
         # Loop through all png in train/
         for (root,dirs,files) in os.walk('test/',topdown=True):
-            for file in tqdm(files, desc="Loading images"):
+            for file in tqdm(files[:100], desc="Loading images"):
                 if file.endswith('.png'):
                     if file[1] == "_":
                         os.remove(os.path.join(root, file))
@@ -42,7 +42,7 @@ def main():
                     predictions = infer(net, img)
 
                     images_count += 1
-                    if check_correctness(predictions, ground_truth, with_allowance=True) == False:
+                    if check_correctness(predictions, ground_truth) == False:
                         wrong_count += 1
                         if len(ground_truth) == len(char_images):
                             data.append(DataObject(img, processed_img, num_chars, char_images, ground_truth, predictions))
