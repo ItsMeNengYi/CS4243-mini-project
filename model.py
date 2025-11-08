@@ -58,17 +58,17 @@ class Model(nn.Module):
     def __init__(self, input_shape=(1, 42, 42)):
         super().__init__()
         self.features = nn.Sequential(
-            nn.Conv2d(1, 32, 3, padding=1), nn.BatchNorm2d(32), nn.ReLU(),
-            nn.Conv2d(32, 32, 3, padding=1), nn.BatchNorm2d(32), nn.ReLU(),
+            ConvBlock(1, 32),
+            ConvBlock(32, 32),
             nn.MaxPool2d(2),
             nn.Dropout(0.05),
 
-            nn.Conv2d(32, 64, 3, padding=1), nn.BatchNorm2d(64), nn.ReLU(),
-            nn.Conv2d(64, 64, 3, padding=1), nn.BatchNorm2d(64), nn.ReLU(),
+            ConvBlock(32, 64),
+            ConvBlock(64, 64),
             nn.MaxPool2d(2),
             nn.Dropout(0.15),
 
-            nn.Conv2d(64, 128, 3, padding=1), nn.BatchNorm2d(128), nn.ReLU(),
+            ConvBlock(64, 128),
             nn.MaxPool2d(2),
             nn.Dropout(0.25),
         )
@@ -89,6 +89,18 @@ class Model(nn.Module):
         x = self.classifier(x)
         return x
 
+class ConvBlock(nn.Module):
+    def __init__(self, in_channels, out_channels, kernel_size=3, padding=1):
+        super(ConvBlock, self).__init__()
+        self.conv = nn.Conv2d(in_channels, out_channels, kernel_size=kernel_size, padding=padding)
+        self.bn = nn.BatchNorm2d(out_channels)
+        self.relu = nn.ReLU()
+
+    def forward(self, x):
+        x = self.conv(x)
+        x = self.bn(x)
+        x = self.relu(x)
+        return x
 
 def infer(net, captcha):
     char_images = split_into_char_images(captcha)
