@@ -201,6 +201,7 @@ def split_by_column(img: np.ndarray) -> tuple[int, list[np.ndarray]]:
         char_images.append(char_img)
 
     return len(char_images), char_images
+    
 def segment_by_color(
     img: np.ndarray, 
     eps: float = 0.5,           # DBSCAN neighborhood radius (tuned)
@@ -348,59 +349,75 @@ def mean_hue(img):
     return np.sum(np.where(grey!=255, hsv[:,:,0],0)) / np.sum(np.where(grey!=255, 1,0))
 
 def process_character_images(imgs):
-    min_scale = 1000
-    processed = imgs
-    for i, img in enumerate(imgs):
-        # --- Convert to grayscale ---
+    if not imgs:
+        return []
+
+    min_scale = float("inf")
+    processed = []
+
+    for img in imgs:
         gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
-        
-        # --- Invert so character = white (255), background = black (0) ---
         gray = 255 - gray
-        
-        # --- Find bounding box of character ---
+
         coords = cv2.findNonZero(gray)
+        if coords is None:
+            # no foreground — skip this image
+            continue
+
         x, y, w, h = cv2.boundingRect(coords)
-        
-        # --- Crop + 3px padding ---
+        if w == 0 or h == 0:
+            continue
+
         pad = 3
         x1 = max(x - pad, 0)
         y1 = max(y - pad, 0)
         x2 = min(x + w + pad, gray.shape[1])
         y2 = min(y + h + pad, gray.shape[0])
         cropped = gray[y1:y2, x1:x2]
-    
-        # --- Normalize brightness: stretch intensity range to full 0–255 ---
+
+        # normalize intensity
         min_val, max_val = np.min(cropped), np.max(cropped)
-        if max_val > min_val:  # avoid divide-by-zero if image is uniform
+        if max_val > min_val:
             cropped = (cropped - min_val) * (255.0 / (max_val - min_val))
             cropped = np.clip(cropped, 0, 255).astype(np.uint8)
-        
-        # --- Target canvas and padding ---
+
         target_size = 42
         pad = 3
-        available_size = target_size - 2 * pad  # 38×38 drawable area
-    
-        h, w = cropped.shape
-        scale = min(available_size / h, available_size / w)  # scale to fit within 38×38
-        min_scale = scale if scale < min_scale else min_scale
-        processed[i] = cropped
+        available_size = target_size - 2 * pad
 
-    scale = min_scale
-    for i, cropped in enumerate(processed):
         h, w = cropped.shape
-        # --- Resize with preserved aspect ratio ---
-        new_w, new_h = int(w * scale), int(h * scale)
-        resized = cv2.resize(cropped, (new_w, new_h), interpolation=cv2.INTER_AREA if scale < 1 else cv2.INTER_CUBIC)
-    
-        # --- Create blank 42×42 black background ---
+        scale = min(available_size / max(1, h), available_size / max(1, w))
+        min_scale = min(min_scale, scale)
+        processed.append(cropped)
+
+    # if no valid chars, stop
+    if not processed:
+        return []
+
+    scale = max(min_scale, 1e-3)
+    target_size = 42
+    final_images = []
+
+    for cropped in processed:
+        h, w = cropped.shape
+        if w == 0 or h == 0:
+            continue
+
+        new_w = max(1, int(round(w * scale)))
+        new_h = max(1, int(round(h * scale)))
+
+        resized = cv2.resize(
+            cropped, (new_w, new_h),
+            interpolation=cv2.INTER_AREA if scale < 1 else cv2.INTER_CUBIC
+        )
+
         canvas = np.zeros((target_size, target_size), dtype=np.uint8)
-        
-        # --- Center the character ---
         y_offset = (target_size - new_h) // 2
         x_offset = (target_size - new_w) // 2
         canvas[y_offset:y_offset + new_h, x_offset:x_offset + new_w] = resized
-        processed[i] = canvas
-    return processed
+        final_images.append(canvas)
+
+    return final_images
 
 def split_into_char_images(img):
     img = preprocessing_remove_lines(img) # Remove lines

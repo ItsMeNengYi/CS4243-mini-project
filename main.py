@@ -26,7 +26,7 @@ def main():
         images_count = 0
         # Loop through all png in train/
         for (root,dirs,files) in os.walk('test/',topdown=True):
-            for file in tqdm(files[:100], desc="Loading images"):
+            for file in tqdm(files, desc="Loading images"):
                 if file.endswith('.png'):
                     if file[1] == "_":
                         os.remove(os.path.join(root, file))
