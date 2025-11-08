@@ -421,12 +421,14 @@ def is_char_correct_with_allowance(input, truth):
     similars = [["o", "0", "d", "q"], 
                ["1", "l", "i"],
                ["9", "q"],
+               ["9", "g"],
                ["b", "6"],
                ["2", "z"],
                ["u", "v"],
                ["e", "m"],
                ["m", "3"],
-               ["7", "1"]]
+               ["7", "1"],
+               ["s", "5"]]
 
     result = input == truth
     
@@ -436,6 +438,7 @@ def is_char_correct_with_allowance(input, truth):
 
     return result
 
+    
 # ------DEPRECATED FUNCTIONS------
 # def emphasize_spikes(signal, w=11):
 #     """

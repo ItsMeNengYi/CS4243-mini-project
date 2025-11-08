@@ -22,10 +22,11 @@ def main():
         data = st.session_state.data
 
         wrong_count = 0
+        wrong_count_with_allowance = 0
         images_count = 0
         # Loop through all png in train/
         for (root,dirs,files) in os.walk('test/',topdown=True):
-            for file in tqdm(files[:100], desc="Loading images"):
+            for file in tqdm(files, desc="Loading images"):
                 if file.endswith('.png'):
                     if file[1] == "_":
                         os.remove(os.path.join(root, file))
@@ -44,12 +45,17 @@ def main():
                     images_count += 1
                     if check_correctness(predictions, ground_truth) == False:
                         wrong_count += 1
+                        
+                        if check_correctness(predictions, ground_truth, with_allowance=True) == False:
+                            wrong_count_with_allowance += 1
+                            
                         if len(ground_truth) == len(char_images):
                             data.append(DataObject(img, processed_img, num_chars, char_images, ground_truth, predictions))
                         continue
                     
         print(f"Images count: {images_count}")
-        print(f"Wrong count: {wrong_count}")
+        print(f"Wrong count: {wrong_count} - {wrong_count / images_count * 100:.2f}%")
+        print(f"Wrong count with allowance: {wrong_count_with_allowance} - {wrong_count_with_allowance / images_count * 100:.2f}%")
     data_previewer(st.session_state.data)
 
 

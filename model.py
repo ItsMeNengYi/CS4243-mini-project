@@ -2,7 +2,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 import torch
 
-from utils import split_into_char_images
+from utils import split_into_char_images, is_char_correct_with_allowance
 # Add your Neural Network here (if using NN)
 char_classes = {
     "0": 0,
@@ -112,26 +112,6 @@ def count_params(net, trainable=False):
     else:
         count = sum(p.numel() for p in net.parameters())
     return count
-
-
-def is_char_correct_with_allowance(input, truth):
-    similars = [["o", "0", "d", "q"], 
-               ["1", "l", "i"],
-               ["9", "q"],
-               ["b", "6"],
-               ["2", "z"],
-               ["u", "v"],
-               ["e", "m"],
-               ["m", "3"],
-               ["7", "1"]]
-
-    result = input == truth
-    
-    for group in similars:
-        if truth in group:
-            result = result or (input in group)
-
-    return result
 
 def check_correctness(predictions, ground_truth, with_allowance=False):
     if len(predictions) != len(ground_truth):
