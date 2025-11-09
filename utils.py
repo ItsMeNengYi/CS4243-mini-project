@@ -359,6 +359,8 @@ def process_character_images(imgs):
         gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
         gray = 255 - gray
 
+        gray[gray < 5] = 0
+
         coords = cv2.findNonZero(gray)
         if coords is None:
             # no foreground — skip this image
@@ -394,7 +396,7 @@ def process_character_images(imgs):
     if not processed:
         return []
 
-    scale = max(min_scale, 1e-3)
+    scale = max(min_scale, 0.001)
     target_size = 42
     final_images = []
 
