@@ -31,7 +31,7 @@ def main():
                     if file[1] == "_":
                         os.remove(os.path.join(root, file))
                         continue
-                    if file.split("-")[1].split(".png")[0] != "0":
+                    if len(file.split("-")[1].split(".png")[0]) != 1: # remove any images marked wrong (train data)
                         continue
                     img_path = os.path.join(root, file)
                     img = cv2.imread(img_path)
