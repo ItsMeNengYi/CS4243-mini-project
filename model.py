@@ -46,47 +46,96 @@ num_classes = len(char_classes)
 
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
-class Model(nn.Module):
+class ImageSequenceClassifier(nn.Module):
+    def __init__(self, input_shape=(1, 42, 42), latent_channel=64, embed_dim=64, num_heads=4, num_classes=num_classes):
+        super().__init__()
+        self.featuriser = Featuriser(input_channel=input_shape[0], output_channel=latent_channel) 
+        self._to_linear = self._get_conv_output(input_shape)
+        self.proj = nn.Linear(self._to_linear, latent_channel)
+        self.attn = nn.MultiheadAttention(embed_dim=embed_dim, num_heads=num_heads, batch_first=True)
+        # --- Automatically compute flattened feature size ---
+
+        self.classifier = Classifier(input_features=embed_dim, num_classes=num_classes)
+
+
+    def forward(self, x, mask=None):
+        # x: [B, N, C, H, W], N is sequence length
+        B, N, C, H, W = x.shape
+
+        # x: [B * N, C, H, W]
+        x = x.reshape(B*N, C, H, W)
+
+        # x: [B * N, H * W * C_new], CNN feature extraction
+        features = self.featuriser(x)  
+
+        # x: [B, N, H * W * C_new], Project to latent dimension
+        features = features.view(B, N, -1)
+
+        # x: [B, N, L_D], D is latent dimension
+        tokens = self.proj(features)
+
+        # ---- Self-attention with mask ----
+        # key_padding_mask: shape [B, N], True = PAD
+        key_padding_mask = None
+        if mask is not None:
+            key_padding_mask = ~mask  # invert: now True = pad
+
+        tokens, _ = self.attn(tokens, tokens, tokens, key_padding_mask=key_padding_mask)
+
+        # x: [B, N, Class], FC per token
+        logits = self.classifier(tokens)    # [B, total_tokens, num_classes]
+        
+        # x: [B, N, Class]
+        return logits
     def _get_conv_output(self, shape):
         """Pass a dummy input to conv layers to compute flatten size"""
         with torch.no_grad():
             x = torch.zeros(1, *shape)
-            x = self.features(x)
-            n_features = x.numel()  # total features for nn.Linear
+            x = self.featuriser(x)
+            n_features = x.view(1, -1).size(1)
         return n_features
+
+class Classifier(nn.Module):
+    def __init__(self, input_features, num_classes):
+        super().__init__()
+        self.classifier = nn.Sequential(
+            nn.Linear(input_features, 128),
+            nn.ReLU(),
+            nn.Dropout(0.3),
+            nn.Linear(128, num_classes)
+        )
     
-    def __init__(self, input_shape=(1, 42, 42)):
+    def forward(self, x):
+        return self.classifier(x)
+
+class SelfAttention(nn.Module):
+    def __init__(self, dim, num_heads=4):
+        super().__init__()
+        self.attn = nn.MultiheadAttention(embed_dim=dim, num_heads=num_heads, batch_first=True)
+    
+    def forward(self, x):
+        out, _ = self.attn(x, x, x)
+        return out
+    
+class Featuriser(nn.Module):
+    def __init__(self, input_channel, output_channel=64):
         super().__init__()
         self.features = nn.Sequential(
-            ConvBlock(1, 32),
+            ConvBlock(input_channel, 32),
             ConvBlock(32, 32),
             nn.MaxPool2d(2),
             nn.Dropout(0.05),
 
             ConvBlock(32, 64),
-            ConvBlock(64, 64),
+            ConvBlock(64, output_channel),
             nn.MaxPool2d(2),
             nn.Dropout(0.15),
-
-            ConvBlock(64, 128),
-            nn.MaxPool2d(2),
-            nn.Dropout(0.25),
-        )
-
-        # --- Automatically compute flattened feature size ---
-        self._to_linear = self._get_conv_output(input_shape)
-        
-        self.classifier = nn.Sequential(
-            nn.Linear(self._to_linear, 256),  # adapt based on your input size
-            nn.ReLU(),
-            nn.Dropout(0.3),
-            nn.Linear(256, num_classes)
         )
 
     def forward(self, x):
         x = self.features(x)
-        x = torch.flatten(x, 1)
-        x = self.classifier(x)
+        # (B*N, C, H, W) -> (B*N, C*H*W)
+        x = x.view(x.size(0), -1)
         return x
 
 class ConvBlock(nn.Module):
