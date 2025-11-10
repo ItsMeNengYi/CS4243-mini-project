@@ -7,12 +7,13 @@ from sklearn.cluster import DBSCAN
 from sklearn.preprocessing import StandardScaler
 from scipy.ndimage import uniform_filter
 
+
 class DataObject:
-    def __init__(self, img, processed_img, number_of_characters, list_of_character_images, ground_truth, prediction):
+    def __init__(self, img, processed_img, number_of_characters, list_of_character_images, ground_truth, predictions):
         self.img = img
         self.processed_img = processed_img
         self.ground_truth = ground_truth
-        self.prediction = prediction
+        self.predictions = predictions
         self.number_of_characters = number_of_characters
         self.character_images = list_of_character_images
 
@@ -20,7 +21,7 @@ class DataObject:
         self.predictions = predictions
     
 
-def data_previewer(data, batch_size=20):
+def data_previewer(data, batch_size=30):
     if "loaded" not in st.session_state:
         st.session_state.loaded = batch_size
 
@@ -39,46 +40,80 @@ def data_previewer(data, batch_size=20):
             processed_rgb = cv2.cvtColor(item.processed_img, cv2.COLOR_BGR2RGB)
             cols[1].image(processed_rgb, caption="Processed", width='content')
 
+
+            cols2 = st.columns(len(item.character_images))
             for j, char_img in enumerate(item.character_images):
+                pred = item.predictions[j] if j < len(item.predictions) else 'N/A'
+                truth = item.ground_truth[j] if j < len(item.ground_truth) else 'N/A'
+                if pred == truth:
+                    border_color = [0, 255, 0]
+                elif check_correctness(pred, truth, with_allowance=True):
+                    border_color = [255, 255, 0]
+                elif pred == "N/A" or pred != truth:
+                    border_color = [255, 0, 0]
                 char_rgb = cv2.cvtColor(char_img, cv2.COLOR_BGR2RGB)
-                st.image(char_rgb, caption=f"Char {j+1}")
+                border_width = 10
+                img_with_border = cv2.copyMakeBorder(
+                    char_rgb,
+                    border_width, border_width, border_width, border_width,
+                    cv2.BORDER_CONSTANT,
+                    value=border_color
+                )
+                cols2[j].image(img_with_border, caption=f"Truth: {truth} | Pred: {pred}")
 
             # Compact text info
+            pred_string = "".join(item.predictions)
             st.markdown(
-                f"**Ground Truth:** {item.ground_truth} | "
-                f"**Prediction:** {item.prediction}"
+                f"**Ground Truth:** {item.ground_truth} | **Prediction:** {pred_string}"
             )
             st.markdown("---")  # separator
 
-    # Load more button a
+    # Load more button
     if items_to_show < len(data):
         if st.button("⬇️ Load more"):
             st.session_state.loaded += batch_size
             st.rerun()
 
+
 def preprocessing_remove_lines(img) -> np.ndarray: 
+    
     img_grey = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
     lines = np.where(img_grey == 0, 255, 0).astype(np.uint8)
     # Expand lines to 3 channels
     lines = cv2.merge([lines, lines, lines])
-    processed = img + lines
+    processed = np.clip(img + lines, 0, 255).astype(np.uint8)
 
-    # Convert to float for computation
-    img = img.astype(float)
-    
-    # Compute local mean for each channel using a 3x3 filter
-    avg_img = np.zeros_like(img)
-    for c in range(3):
-        avg_img[..., c] = uniform_filter(processed[..., c], size=3, mode='reflect')
-    
-    # Create mask for black pixels
     mask_black = np.all(img == 0, axis=-1)
+    
+    # Compute 3x3 minimum for each channel
+    # kernel = np.ones((3, 3), np.uint8) 
+    kernel = cv2.getStructuringElement(cv2.MORPH_CROSS, (3, 3)) # cross-shaped kernel, no corners
+    min_img = np.stack([cv2.erode(processed[..., c], kernel) for c in range(3)], axis=-1)
 
-    # Replace black pixels with local averages
-    img[mask_black] = avg_img[mask_black]
+    # Replace black pixels with neighborhood minima
+    result = img.copy()
+    result[mask_black] = min_img[mask_black]
+    
+    """
+    # --- CV2 INPAINT METHOD ---
+    # Convert to grayscale
+    gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
+    
+    # Create a mask for black pixels (since lines are black)
+    # Adjust threshold if lines aren't perfectly black
+    mask = cv2.inRange(gray, 0, 1)
+    
+    # Inpaint (remove black lines and fill with nearby pixels)
+    result = cv2.inpaint(img, mask, inpaintRadius=1, flags=cv2.INPAINT_TELEA)
 
-    # Clip and convert back
-    return np.clip(img, 0, 255).astype(np.uint8)
+    # Create a mask for pixels that are nearly white across all channels
+    near_white_mask = np.all(result > 240, axis=-1)
+    
+    # Set those pixels to pure white
+    result[near_white_mask] = [255, 255, 255]
+    """
+
+    return result
 
 def show_img(img: np.ndarray, title=""):
     # If image has 2 dimensions → grayscale
@@ -166,7 +201,7 @@ def split_by_column(img: np.ndarray) -> tuple[int, list[np.ndarray]]:
         char_images.append(char_img)
 
     return len(char_images), char_images
-
+    
 def segment_by_color(
     img: np.ndarray, 
     eps: float = 0.5,           # DBSCAN neighborhood radius (tuned)
@@ -307,12 +342,124 @@ def segment_by_color(
 
     return len(fin_images), fin_images
 
+
 def mean_hue(img):
     hsv = cv2.cvtColor(img, cv2.COLOR_BGR2HSV)
     grey = np.mean(img,axis=2)
     return np.sum(np.where(grey!=255, hsv[:,:,0],0)) / np.sum(np.where(grey!=255, 1,0))
 
+def process_character_images(imgs):
+    if not imgs:
+        return []
 
+    min_scale = float("inf")
+    processed = []
+
+    for img in imgs:
+        gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
+        gray = 255 - gray
+
+        gray[gray < 5] = 0
+
+        coords = cv2.findNonZero(gray)
+        if coords is None:
+            # no foreground — skip this image
+            continue
+
+        x, y, w, h = cv2.boundingRect(coords)
+        if w == 0 or h == 0:
+            continue
+
+        pad = 3
+        x1 = max(x - pad, 0)
+        y1 = max(y - pad, 0)
+        x2 = min(x + w + pad, gray.shape[1])
+        y2 = min(y + h + pad, gray.shape[0])
+        cropped = gray[y1:y2, x1:x2]
+
+        # normalize intensity
+        min_val, max_val = np.min(cropped), np.max(cropped)
+        if max_val > min_val:
+            cropped = (cropped - min_val) * (255.0 / (max_val - min_val))
+            cropped = np.clip(cropped, 0, 255).astype(np.uint8)
+
+        target_size = 42
+        pad = 3
+        available_size = target_size - 2 * pad
+
+        h, w = cropped.shape
+        scale = min(available_size / max(1, h), available_size / max(1, w))
+        min_scale = min(min_scale, scale)
+        processed.append(cropped)
+
+    # if no valid chars, stop
+    if not processed:
+        return []
+
+    scale = max(min_scale, 0.001)
+    target_size = 42
+    final_images = []
+
+    for cropped in processed:
+        h, w = cropped.shape
+        if w == 0 or h == 0:
+            continue
+
+        new_w = max(1, int(round(w * scale)))
+        new_h = max(1, int(round(h * scale)))
+
+        resized = cv2.resize(
+            cropped, (new_w, new_h),
+            interpolation=cv2.INTER_AREA if scale < 1 else cv2.INTER_CUBIC
+        )
+
+        canvas = np.zeros((target_size, target_size), dtype=np.uint8)
+        y_offset = (target_size - new_h) // 2
+        x_offset = (target_size - new_w) // 2
+        canvas[y_offset:y_offset + new_h, x_offset:x_offset + new_w] = resized
+        final_images.append(canvas)
+
+    return final_images
+
+def split_into_char_images(img):
+    img = preprocessing_remove_lines(img) # Remove lines
+    _, char_images = preprocessing_split_by_characters(img) # Split chars
+    return process_character_images(char_images)
+
+def check_correctness(predictions, ground_truth, with_allowance=False):
+    if len(predictions) != len(ground_truth):
+        return False
+    for p, t in zip(predictions, ground_truth):
+        if with_allowance:
+            if not is_char_correct_with_allowance(p, t):
+                return False
+        else:
+            if p != t:
+                return False
+    return True
+
+def is_char_correct_with_allowance(input, truth):
+    similars = [["o", "0", "d", "q"], 
+               ["1", "l", "i"],
+               ["9", "q"],
+               ["9", "g"],
+               ["b", "6"],
+               ["2", "z"],
+               ["u", "v"],
+               ["e", "m"],
+               ["m", "3"],
+               ["7", "1"],
+               ["s", "5"]]
+
+    result = input == truth
+    
+    for group in similars:
+        if truth in group:
+            result = result or (input in group)
+
+    return result
+
+    
 # ------DEPRECATED FUNCTIONS------
 # def emphasize_spikes(signal, w=11):
 #     """
