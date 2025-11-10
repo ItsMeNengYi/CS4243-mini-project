@@ -128,11 +128,11 @@ class Featuriser(nn.Module):
             nn.Dropout(0.05),
 
             ConvBlock(32, 64),
-            ConvBlock(64, output_channel),
+            ConvBlock(64, 64),
             nn.MaxPool2d(2),
             nn.Dropout(0.15),
 
-            ConvBlock(64, 128),
+            ConvBlock(64, output_channel),
             nn.MaxPool2d(2),
             nn.Dropout(0.25),
         )
