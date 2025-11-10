@@ -47,11 +47,11 @@ num_classes = len(char_classes)
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
 class ImageSequenceClassifier(nn.Module):
-    def __init__(self, input_shape=(1, 42, 42), latent_channel=64, embed_dim=64, num_heads=4, num_classes=num_classes):
+    def __init__(self, input_shape=(1, 42, 42), latent_channel=128, embed_dim=128, num_heads=8, num_classes=num_classes):
         super().__init__()
         self.featuriser = Featuriser(input_channel=input_shape[0], output_channel=latent_channel) 
         self._to_linear = self._get_conv_output(input_shape)
-        self.proj = nn.Linear(self._to_linear, latent_channel)
+        self.proj = nn.Linear(self._to_linear, embed_dim)
         self.attn = nn.MultiheadAttention(embed_dim=embed_dim, num_heads=num_heads, batch_first=True)
         # --- Automatically compute flattened feature size ---
 
@@ -119,7 +119,7 @@ class SelfAttention(nn.Module):
         return out
     
 class Featuriser(nn.Module):
-    def __init__(self, input_channel, output_channel=64):
+    def __init__(self, input_channel, output_channel):
         super().__init__()
         self.features = nn.Sequential(
             ConvBlock(input_channel, 32),
@@ -131,6 +131,10 @@ class Featuriser(nn.Module):
             ConvBlock(64, output_channel),
             nn.MaxPool2d(2),
             nn.Dropout(0.15),
+
+            ConvBlock(64, 128),
+            nn.MaxPool2d(2),
+            nn.Dropout(0.25),
         )
 
     def forward(self, x):
