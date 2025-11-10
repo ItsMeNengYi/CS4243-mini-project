@@ -153,20 +153,14 @@ class ConvBlock(nn.Module):
         return x
 
 def infer(net, captcha):
-    char_images = split_into_char_images(captcha)
-    predictions = []
     net.to(device)
-    with torch.no_grad():
-        for ci in char_images:
-            img_tensor = torch.tensor(ci, dtype=torch.float32).unsqueeze(0).unsqueeze(0) / 255.0  # Add batch and channel dimensions
-            img_tensor = img_tensor.to(device)
-            output = net.forward(img_tensor)
-            probs = F.softmax(output, dim=1)
-            confidence, predicted_class = torch.max(probs, dim=1)
-            item = predicted_class.item()
-            keys = [k for k, v in char_classes.items() if v == item]
-            predictions.append(keys[0] if keys else None)
-    return predictions
+    char_imgs = [transform(ci) for ci in split_into_char_images(captcha)]  # list of [C,H,W]
+    X = torch.stack(char_imgs).unsqueeze(0).to(device)  # shape [1, N, C, H, W]
+    mask = torch.ones(1, len(char_imgs), dtype=torch.bool).to(device)
+    logits = net(X, mask)  # [1, N, num_classes]
+    preds = torch.argmax(logits, dim=-1).squeeze(0)
+    predicted_chars = [k for i in preds for k, v in char_classes.items() if v == i]
+    return predicted_chars
 
 def count_params(net, trainable=False):
     if trainable:
