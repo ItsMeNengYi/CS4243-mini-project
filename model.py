@@ -51,17 +51,12 @@ class ImageSequenceClassifier(nn.Module):
         super().__init__()
         self.featuriser = Featuriser(input_channel=input_shape[0], output_channel=latent_channel) 
         self._to_linear = self._get_conv_output(input_shape)
-        # --- Linear projection from CNN features to embedding dimension ---
         self.proj = nn.Sequential(
             nn.Linear(self._to_linear, embed_dim),
-            nn.LayerNorm(embed_dim), # layer norm
+            nn.LayerNorm(embed_dim), 
             nn.ReLU()
         )
-        self.attn = nn.MultiheadAttention(embed_dim=embed_dim, num_heads=num_heads, batch_first=True)
-        self.attn_norm = nn.LayerNorm(embed_dim)  # normalization after attention
-        
-        # --- Automatically compute flattened feature size ---
-
+        self.attn = SelfAttention(dim=embed_dim, num_heads=num_heads)
         self.classifier = Classifier(input_features=embed_dim, num_classes=num_classes)
 
 
@@ -75,10 +70,10 @@ class ImageSequenceClassifier(nn.Module):
         # x: [B * N, H * W * C_new], CNN feature extraction
         features = self.featuriser(x)  
 
-        # x: [B, N, H * W * C_new], Project to latent dimension
+        # x: [B, N, H * W * C_new], Recover sequence shape
         features = features.view(B, N, -1)
 
-        # x: [B, N, L_D], D is latent dimension
+        # x: [B, N, E], Project to embedding dimension
         tokens = self.proj(features)
 
         # ---- Self-attention with mask ----
@@ -88,14 +83,14 @@ class ImageSequenceClassifier(nn.Module):
             key_padding_mask = ~mask  # invert: now True = pad
             key_padding_mask = key_padding_mask.to(x.device)
 
-        attn_out, _ = self.attn(tokens, tokens, tokens, key_padding_mask=key_padding_mask)
-        tokens = self.attn_norm(tokens + attn_out)  # residual connection + norm
+        attn_out = self.attn(tokens, tokens, tokens, key_padding_mask=key_padding_mask)
 
         # x: [B, N, Class], FC per token
-        logits = self.classifier(tokens)    # [B, total_tokens, num_classes]
+        logits = self.classifier(attn_out) 
         
         # x: [B, N, Class]
         return logits
+        
     def _get_conv_output(self, shape):
         """Pass a dummy input to conv layers to compute flatten size"""
         with torch.no_grad():
@@ -109,6 +104,7 @@ class Classifier(nn.Module):
         super().__init__()
         self.classifier = nn.Sequential(
             nn.Linear(input_features, 128),
+            nn.LayerNorm(128),
             nn.ReLU(),
             nn.Dropout(0.3),
             nn.Linear(128, num_classes)
@@ -121,11 +117,14 @@ class SelfAttention(nn.Module):
     def __init__(self, dim, num_heads=4):
         super().__init__()
         self.attn = nn.MultiheadAttention(embed_dim=dim, num_heads=num_heads, batch_first=True)
+        self.attn_norm = nn.LayerNorm(dim) 
+        self.activation = nn.ReLU()
     
     def forward(self, x):
         out, _ = self.attn(x, x, x)
-        return out
-    
+        out = self.attn_norm(out)
+        return self.activation(out)
+
 class Featuriser(nn.Module):
     def __init__(self, input_channel, output_channel):
         super().__init__()
