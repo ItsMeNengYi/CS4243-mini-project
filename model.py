@@ -51,8 +51,15 @@ class ImageSequenceClassifier(nn.Module):
         super().__init__()
         self.featuriser = Featuriser(input_channel=input_shape[0], output_channel=latent_channel) 
         self._to_linear = self._get_conv_output(input_shape)
-        self.proj = nn.Linear(self._to_linear, embed_dim)
+        # --- Linear projection from CNN features to embedding dimension ---
+        self.proj = nn.Sequential(
+            nn.Linear(self._to_linear, embed_dim),
+            nn.LayerNorm(embed_dim), # layer norm
+            nn.ReLU()
+        )
         self.attn = nn.MultiheadAttention(embed_dim=embed_dim, num_heads=num_heads, batch_first=True)
+        self.attn_norm = nn.LayerNorm(embed_dim)  # normalization after attention
+        
         # --- Automatically compute flattened feature size ---
 
         self.classifier = Classifier(input_features=embed_dim, num_classes=num_classes)
@@ -81,7 +88,8 @@ class ImageSequenceClassifier(nn.Module):
             key_padding_mask = ~mask  # invert: now True = pad
             key_padding_mask = key_padding_mask.to(x.device)
 
-        tokens, _ = self.attn(tokens, tokens, tokens, key_padding_mask=key_padding_mask)
+        attn_out, _ = self.attn(tokens, tokens, tokens, key_padding_mask=key_padding_mask)
+        tokens = self.attn_norm(tokens + attn_out)  # residual connection + norm
 
         # x: [B, N, Class], FC per token
         logits = self.classifier(tokens)    # [B, total_tokens, num_classes]
