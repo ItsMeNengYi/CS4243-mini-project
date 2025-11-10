@@ -79,6 +79,7 @@ class ImageSequenceClassifier(nn.Module):
         key_padding_mask = None
         if mask is not None:
             key_padding_mask = ~mask  # invert: now True = pad
+            key_padding_mask = key_padding_mask.to(x.device)
 
         tokens, _ = self.attn(tokens, tokens, tokens, key_padding_mask=key_padding_mask)
 
