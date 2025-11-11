@@ -114,16 +114,25 @@ class Classifier(nn.Module):
         return self.classifier(x)
 
 class SelfAttention(nn.Module):
-    def __init__(self, dim, num_heads=4):
+    def __init__(self, dim, num_heads=4, ff_dim=None, dropout=0.1):
         super().__init__()
-        self.attn = nn.MultiheadAttention(embed_dim=dim, num_heads=num_heads, batch_first=True)
-        self.attn_norm = nn.LayerNorm(dim) 
-        self.activation = nn.ReLU()
-    
+        self.attn = nn.MultiheadAttention(embed_dim=dim, num_heads=num_heads, batch_first=True, dropout=dropout)
+        self.attn_norm = nn.LayerNorm(dim)
+        self.ffn = nn.Sequential(
+            nn.Linear(dim, ff_dim or dim*4),
+            nn.ReLU(),
+            nn.Dropout(dropout),
+            nn.Linear(ff_dim or dim*4, dim),
+            nn.Dropout(dropout)
+        )
+        self.ffn_norm = nn.LayerNorm(dim)
+
     def forward(self, x, key_padding_mask=None):
-        out, _ = self.attn(x, x, x, key_padding_mask=key_padding_mask)
-        out = self.attn_norm(out)
-        return self.activation(out)
+        attn_out, _ = self.attn(x, x, x, key_padding_mask=key_padding_mask)
+        x = self.attn_norm(x + attn_out)
+        ffn_out = self.ffn(x)
+        x = self.ffn_norm(x + ffn_out)
+        return x
 
 class Featuriser(nn.Module):
     def __init__(self, input_channel, output_channel):
