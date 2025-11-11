@@ -83,7 +83,7 @@ class ImageSequenceClassifier(nn.Module):
             key_padding_mask = ~mask  # invert: now True = pad
             key_padding_mask = key_padding_mask.to(x.device)
 
-        attn_out = self.attn(tokens, tokens, tokens, key_padding_mask=key_padding_mask)
+        attn_out = self.attn(tokens, key_padding_mask=key_padding_mask)
 
         # x: [B, N, Class], FC per token
         logits = self.classifier(attn_out) 
@@ -120,8 +120,8 @@ class SelfAttention(nn.Module):
         self.attn_norm = nn.LayerNorm(dim) 
         self.activation = nn.ReLU()
     
-    def forward(self, x):
-        out, _ = self.attn(x, x, x)
+    def forward(self, x, key_padding_mask=None):
+        out, _ = self.attn(x, x, x, key_padding_mask=key_padding_mask)
         out = self.attn_norm(out)
         return self.activation(out)
 
