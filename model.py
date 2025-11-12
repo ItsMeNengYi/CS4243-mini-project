@@ -134,9 +134,58 @@ class SelfAttention(nn.Module):
         x = self.ffn_norm(x + ffn_out)
         return x
 
+class SpatialTransformer(nn.Module):
+    def __init__(self, input_channel=1):
+        super(SpatialTransformer, self).__init__()
+
+        # --- Localization network (small CNN) ---
+        self.localization = nn.Sequential(
+            nn.Conv2d(input_channel, 8, kernel_size=7),
+            nn.MaxPool2d(2, stride=2),
+            nn.ReLU(True),
+            nn.Conv2d(8, 10, kernel_size=5),
+            nn.MaxPool2d(2, stride=2),
+            nn.ReLU(True)
+        )
+
+        # Compute the flattened size automatically using dummy input
+        self.fc_input_dim = self._get_fc_input_dim(input_channel)
+        
+        # --- Regressor for 2x3 affine matrix ---
+        self.fc_loc = nn.Sequential(
+            nn.Linear(self.fc_input_dim, 32),
+            nn.ReLU(True),
+            nn.Linear(32, 3 * 2)
+        )
+
+        # Initialize the transformation as identity
+        self.fc_loc[2].weight.data.zero_()
+        self.fc_loc[2].bias.data.copy_(
+            torch.tensor([1, 0, 0, 0, 1, 0], dtype=torch.float)
+        )
+
+    def _get_fc_input_dim(self, input_channel):
+        with torch.no_grad():
+            dummy = torch.zeros(1, input_channel, 42, 42)  # use your input size
+            out = self.localization(dummy)
+            return out.view(1, -1).size(1)
+
+    def forward(self, x):
+        xs = self.localization(x)
+        xs = xs.view(xs.size(0), -1)
+        theta = self.fc_loc(xs)
+        theta = theta.view(-1, 2, 3)
+
+        # Apply the spatial transformation
+        grid = F.affine_grid(theta, x.size(), align_corners=False)
+        x = F.grid_sample(x, grid, align_corners=False)
+        return x
+
 class Featuriser(nn.Module):
     def __init__(self, input_channel, output_channel):
         super().__init__()
+        self.stn = SpatialTransformer(input_channel=input_channel)  # ← Added STN
+        
         self.features = nn.Sequential(
             ConvBlock(input_channel, 32),
             ConvBlock(32, 32),
@@ -154,6 +203,9 @@ class Featuriser(nn.Module):
         )
 
     def forward(self, x):
+         # --- Apply STN first ---
+        x = self.stn(x)
+        
         x = self.features(x)
         # (B*N, C, H, W) -> (B*N, C*H*W)
         x = x.view(x.size(0), -1)
