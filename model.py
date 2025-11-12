@@ -67,8 +67,8 @@ class ResidualBlock(nn.Module):
         out += self.shortcut(x)
         return F.relu(out)
 
-class Model(nn.Module):
-    def __init__(self, num_classes=36, input_size=(42,42)):
+class SmallResNet(nn.Module):
+    def __init__(self, num_classes=36, input_size=(32,32)):
         super().__init__()
         self.layer1 = nn.Sequential(
             nn.Conv2d(1, 32, 3, 1, 1, bias=False),
@@ -89,6 +89,56 @@ class Model(nn.Module):
         x = self.avgpool(x)
         x = torch.flatten(x, 1)
         x = self.fc(x)
+        return x
+
+class STN(nn.Module):
+    def __init__(self, input_size=(42, 42)):
+        super().__init__()
+        self.localization = nn.Sequential(
+            nn.Conv2d(1, 8, kernel_size=7),
+            nn.MaxPool2d(2, 2),
+            nn.ReLU(True),
+            nn.Conv2d(8, 10, kernel_size=5),
+            nn.MaxPool2d(2, 2),
+            nn.ReLU(True)
+        )
+
+        # Compute flattened dimension dynamically
+        self.fc_input_dim = self._get_flattened_size(input_size)
+
+        self.fc_loc = nn.Sequential(
+            nn.Linear(self.fc_input_dim, 32),
+            nn.ReLU(True),
+            nn.Linear(32, 6)
+        )
+
+        # Initialize to identity transform
+        self.fc_loc[-1].weight.data.zero_()
+        self.fc_loc[-1].bias.data.copy_(torch.tensor([1, 0, 0, 0, 1, 0], dtype=torch.float))
+
+    def _get_flattened_size(self, input_size):
+        """Run a dummy forward pass to find flatten size"""
+        x = torch.zeros(1, 1, *input_size)
+        x = self.localization(x)
+        return x.numel()
+
+    def forward(self, x):
+        xs = self.localization(x)
+        xs = xs.view(x.size(0), -1)
+        theta = self.fc_loc(xs)
+        theta = theta.view(-1, 2, 3)
+        grid = F.affine_grid(theta, x.size(), align_corners=False)
+        x = F.grid_sample(x, grid, align_corners=False)
+        return x
+
+class Model(nn.Module):
+    def __init__(self, num_classes=36):
+        super().__init__()
+        self.stn = STN()
+        self.resnet = SmallResNet(num_classes)
+    def forward(self, x):
+        x = self.stn(x)
+        x = self.resnet(x)
         return x
 
 def infer(net, captcha):
