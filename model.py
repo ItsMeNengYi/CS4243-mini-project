@@ -75,7 +75,10 @@ class SmallResNet(nn.Module):
             nn.BatchNorm2d(32),
             nn.ReLU(True)
         )
-        self.layer2 = ResidualBlock(32, 64, downsample=True)
+        self.layer2 = nn.Sequential(
+            ResidualBlock(32, 64, downsample=True),
+            ResidualBlock(64, 64)
+        )
         self.layer3 = ResidualBlock(64, 128, downsample=True)
         self.layer4 = ResidualBlock(128, 128, downsample=True)
         self.avgpool = nn.AdaptiveAvgPool2d((1,1))
