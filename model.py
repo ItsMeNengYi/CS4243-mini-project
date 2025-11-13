@@ -117,9 +117,6 @@ class Classifier(nn.Module):
 class SelfAttention(nn.Module):
     def __init__(self, dim, num_heads=4, ff_dim=None, dropout=0.1):
         super().__init__()
-        self.q_proj = nn.Linear(dim, dim)
-        self.k_proj = nn.Linear(dim, dim)
-        self.v_proj = nn.Linear(dim, dim)
         self.attn = nn.MultiheadAttention(embed_dim=dim, num_heads=num_heads, batch_first=True, dropout=dropout)
         self.attn_norm = nn.LayerNorm(dim)
         self.ffn = nn.Sequential(
@@ -132,10 +129,7 @@ class SelfAttention(nn.Module):
         self.ffn_norm = nn.LayerNorm(dim)
 
     def forward(self, x, key_padding_mask=None):
-        query = self.q_proj(x)
-        key = self.k_proj(x)
-        value = self.v_proj(x)
-        attn_out, _ = self.attn(query, key, value, key_padding_mask=key_padding_mask)
+        attn_out, _ = self.attn(x, x, x, key_padding_mask=key_padding_mask)
         x = self.attn_norm(x + attn_out)
         ffn_out = self.ffn(x)
         x = self.ffn_norm(x + ffn_out)
