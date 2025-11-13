@@ -1,5 +1,6 @@
 import torch.nn as nn
 import torch.nn.functional as F
+import torchvision.transforms as transforms
 import torch
 
 from utils import split_into_char_images, is_char_correct_with_allowance
@@ -244,6 +245,10 @@ class ResidualConvBlock(nn.Module):
 
 def infer(net, captcha):
     net.to(device)
+    transform = transforms.Compose([
+        transforms.ToPILImage(),
+        transforms.ToTensor()  # output shape: [1, H, W]
+    ])
     char_imgs = [transform(ci) for ci in split_into_char_images(captcha)]  # list of [C,H,W]
     X = torch.stack(char_imgs).unsqueeze(0).to(device)  # shape [1, N, C, H, W]
     mask = torch.ones(1, len(char_imgs), dtype=torch.bool).to(device)
