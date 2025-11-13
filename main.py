@@ -12,11 +12,12 @@ char_dir = 'chars_train_data/'
 os.makedirs(char_dir, exist_ok=True)
 
 st.set_page_config(layout="wide")
+device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 def main():
     if 'data' not in st.session_state:
         # --- 1. Load Model ---
         model_path = "char_classification_model.pth"
-        net = torch.load(model_path, weights_only=False)
+        net = torch.load(model_path, weights_only=False, map_location=device)
 
         st.session_state.data = []
         data = st.session_state.data
@@ -26,7 +27,7 @@ def main():
         images_count = 0
         # Loop through all png in train/
         for (root,dirs,files) in os.walk('test/',topdown=True):
-            for file in tqdm(files, desc="Loading images"):
+            for file in tqdm(files[:100], desc="Loading images"):
                 if file.endswith('.png'):
                     if file[1] == "_":
                         os.remove(os.path.join(root, file))

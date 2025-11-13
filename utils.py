@@ -34,11 +34,11 @@ def data_previewer(data, batch_size=30):
 
             # Original image
             img_rgb = cv2.cvtColor(item.img, cv2.COLOR_BGR2RGB)
-            cols[0].image(img_rgb, caption="Original", width='content')
+            cols[0].image(img_rgb, caption="Original")
 
             # Processed image
             processed_rgb = cv2.cvtColor(item.processed_img, cv2.COLOR_BGR2RGB)
-            cols[1].image(processed_rgb, caption="Processed", width='content')
+            cols[1].image(processed_rgb, caption="Processed")
 
 
             cols2 = st.columns(len(item.character_images))
@@ -353,6 +353,7 @@ def process_character_images(imgs):
         return []
 
     min_scale = float("inf")
+    min_y1, max_y2 = float("inf"), 0
     processed = []
 
     for img in imgs:
@@ -371,12 +372,26 @@ def process_character_images(imgs):
             continue
 
         pad = 3
-        x1 = max(x - pad, 0)
         y1 = max(y - pad, 0)
-        x2 = min(x + w + pad, gray.shape[1])
         y2 = min(y + h + pad, gray.shape[0])
-        cropped = gray[y1:y2, x1:x2]
 
+        min_y1 = min(min_y1, y1)
+        max_y2 = max(max_y2, y2)
+
+    for img in imgs:
+        gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
+        gray = 255 - gray
+
+        gray[gray < 5] = 0
+        coords = cv2.findNonZero(gray)
+        x, y, w, h = cv2.boundingRect(coords)
+        if w == 0 or h == 0:
+            continue
+
+        pad = 3
+        x1 = max(x - pad, 0)
+        x2 = min(x + w + pad, gray.shape[1])
+        cropped = gray[min_y1: max_y2, x1:x2]
         # normalize intensity
         min_val, max_val = np.min(cropped), np.max(cropped)
         if max_val > min_val:
@@ -390,6 +405,7 @@ def process_character_images(imgs):
         h, w = cropped.shape
         scale = min(available_size / max(1, h), available_size / max(1, w))
         min_scale = min(min_scale, scale)
+
         processed.append(cropped)
 
     # if no valid chars, stop
