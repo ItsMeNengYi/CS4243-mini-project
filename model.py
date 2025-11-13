@@ -188,17 +188,14 @@ class Featuriser(nn.Module):
         
         self.features = nn.Sequential(
             ConvBlock(input_channel, 32),
-            ConvBlock(32, 32),
             nn.MaxPool2d(2),
             nn.Dropout(0.05),
 
-            ConvBlock(32, 64),
-            ConvBlock(64, 64),
+            ResidualConvBlock(32, 64),
             nn.MaxPool2d(2),
             nn.Dropout(0.15),
 
-            ConvBlock(64, output_channel),
-            nn.MaxPool2d(2),
+            ResidualConvBlock(64, output_channel),
             nn.Dropout(0.25),
         )
 
@@ -223,6 +220,27 @@ class ConvBlock(nn.Module):
         x = self.gn(x)
         x = self.relu(x)
         return x
+
+class ResidualConvBlock(nn.Module):
+    def __init__(self, in_ch, out_ch, kernel_size=3, padding=1, num_groups=8):
+        super().__init__()
+        self.conv1 = nn.Conv2d(in_ch, out_ch, kernel_size, padding=padding)
+        self.gn1 = nn.GroupNorm(num_groups, out_ch)
+        self.relu = nn.ReLU(inplace=True)
+        self.conv2 = nn.Conv2d(out_ch, out_ch, kernel_size, padding=padding)
+        self.gn2 = nn.GroupNorm(num_groups, out_ch)
+        self.skip = (
+            nn.Conv2d(in_ch, out_ch, 1)
+            if in_ch != out_ch
+            else nn.Identity()
+        )
+
+    def forward(self, x):
+        identity = self.skip(x)
+        out = self.relu(self.gn1(self.conv1(x)))
+        out = self.gn2(self.conv2(out))
+        out += identity
+        return self.relu(out)
 
 def infer(net, captcha):
     net.to(device)
