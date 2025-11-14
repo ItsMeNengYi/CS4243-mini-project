@@ -34,11 +34,11 @@ def data_previewer(data, batch_size=30):
 
             # Original image
             img_rgb = cv2.cvtColor(item.img, cv2.COLOR_BGR2RGB)
-            cols[0].image(img_rgb, caption="Original", width='content')
+            cols[0].image(img_rgb, caption="Original")
 
             # Processed image
             processed_rgb = cv2.cvtColor(item.processed_img, cv2.COLOR_BGR2RGB)
-            cols[1].image(processed_rgb, caption="Processed", width='content')
+            cols[1].image(processed_rgb, caption="Processed")
 
 
             cols2 = st.columns(len(item.character_images))
