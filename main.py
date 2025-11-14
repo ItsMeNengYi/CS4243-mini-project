@@ -6,7 +6,7 @@ import torch
 from tqdm import tqdm
 
 from utils import data_previewer, DataObject, split_into_char_images, preprocessing_remove_lines
-from model import Model, infer, check_correctness
+from model import ImageSequenceClassifier, infer, check_correctness
 
 char_dir = 'chars_train_data/'
 os.makedirs(char_dir, exist_ok=True)
@@ -16,8 +16,8 @@ device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 def main():
     if 'data' not in st.session_state:
         # --- 1. Load Model ---
-        model_path = "char_classification_model.pth"
-        net = torch.load(model_path, weights_only=False, map_location=device)
+        model_path = "char_classification_transformer_model.pth"
+        net = torch.load(model_path, weights_only=False, map_location=torch.device('cpu'))
 
         st.session_state.data = []
         data = st.session_state.data
