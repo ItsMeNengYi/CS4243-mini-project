@@ -1,9 +1,9 @@
 # CS4243 Mini Project: CAPTCHA Prediction with Artificial Neural Networks
 ### Team Members: 
-Gan Ren Yick
-Lee Ze Hao
-Edwin Wong Jan Chung
-Teo Choon Keong 
+Gan Ren Yick    
+Lee Ze Hao    
+Edwin Wong Jan Chung    
+Teo Choon Keong     
 
 ### Preprocessing
 Preprocessing (line removal, character image splitting and processing) are defined in utils.py.
