@@ -93,25 +93,6 @@ def preprocessing_remove_lines(img) -> np.ndarray:
     # Replace black pixels with neighborhood minima
     result = img.copy()
     result[mask_black] = min_img[mask_black]
-    
-    """
-    # --- CV2 INPAINT METHOD ---
-    # Convert to grayscale
-    gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
-    
-    # Create a mask for black pixels (since lines are black)
-    # Adjust threshold if lines aren't perfectly black
-    mask = cv2.inRange(gray, 0, 1)
-    
-    # Inpaint (remove black lines and fill with nearby pixels)
-    result = cv2.inpaint(img, mask, inpaintRadius=1, flags=cv2.INPAINT_TELEA)
-
-    # Create a mask for pixels that are nearly white across all channels
-    near_white_mask = np.all(result > 240, axis=-1)
-    
-    # Set those pixels to pure white
-    result[near_white_mask] = [255, 255, 255]
-    """
 
     return result
 
@@ -227,12 +208,12 @@ def segment_by_color(
     Returns:
         (character_count, list_of_character_images)
     """
-    # --- 1. Convert to HSV ---
+    # 1. Convert to HSV 
     hsv = cv2.cvtColor(img, cv2.COLOR_BGR2HSV)
     s_channel = hsv[:, :, 1]
     v_channel = hsv[:, :, 2]
 
-    # --- 2. Filter out white background ---
+    # 2. Filter out white background 
     s_thresh = 5
     v_thresh = 250
     bg_mask = cv2.bitwise_and(
@@ -245,12 +226,12 @@ def segment_by_color(
     if len(y_coords) < min_pixel_area:
         return 0, []
 
-    # --- 3. Get hue values and map to circular coords ---
+    # 3. Get hue values and map to circular coords
     hues = hsv[y_coords, x_coords, 0].astype(np.float32) / 180.0  # normalize hue to [0,1]
     hue_x = np.cos(2 * np.pi * hues)
     hue_y = np.sin(2 * np.pi * hues)
 
-    # --- 4. Combine features: spatial + color ---
+    # 4. Combine features: spatial + color
     features = np.column_stack([
         y_coords, 
         x_coords,
@@ -258,11 +239,11 @@ def segment_by_color(
         hue_y
     ])
 
-    # --- 5. Normalize features (to make x,y comparable to hue) ---
+    # 5. Normalize features (to make x,y comparable to hue)
     features_scaled = StandardScaler().fit_transform(features)
     features_scaled[:, :2] *= spatial_weight  # re-apply spatial weight after scaling
 
-    # --- 6. DBSCAN clustering ---
+    # 6. DBSCAN clustering
     db = DBSCAN(eps=eps, min_samples=db_min_samples).fit(features_scaled)
     labels = db.labels_
     unique_labels = set(labels)
@@ -270,7 +251,7 @@ def segment_by_color(
     char_images = []
     char_bboxes = [[],[]]
 
-    # --- 7. Build masks for each cluster ---
+    # 7. Build masks for each cluster
     for label in unique_labels:
         if label == -1:
             continue  # skip noise
@@ -281,11 +262,11 @@ def segment_by_color(
         cluster_x = x_coords[cluster_idx]
         cluster_mask[cluster_y, cluster_x] = 255
 
-        # --- 8. Morphological close (vertical kernel) ---
+        # 8. Morphological close (vertical kernel)
         kernel = cv2.getStructuringElement(cv2.MORPH_RECT, (3, 5))
         closed_mask = cv2.morphologyEx(cluster_mask, cv2.MORPH_CLOSE, kernel, iterations=1)
 
-        # --- 9. Find connected components (characters) ---
+        # 9. Find connected components (characters)
         num_comp, comp_labels, stats, _ = cv2.connectedComponentsWithStats(closed_mask, 8, cv2.CV_32S)
         if num_comp <= 1:
             continue
@@ -312,14 +293,14 @@ def segment_by_color(
             char_bboxes[1].append(x_max)
         
 
-    # --- 10. Sort characters left-to-right ---
+    # 10. Sort characters left-to-right
     if char_bboxes:
         sorted_idx = np.argsort(char_bboxes[0])
         char_images = [char_images[i] for i in sorted_idx]
         char_bboxes[0] = [char_bboxes[0][i] for i in sorted_idx]
         char_bboxes[1]= [char_bboxes[1][i] for i in sorted_idx]
 
-    # --- 11. Merge similar hue value and neighbour imgs
+    # 11. Merge similar hue value and neighbour imgs
     hue_diff_thres = 0.5
     fin_images = []
     i = 0
@@ -458,62 +439,3 @@ def is_char_correct_with_allowance(input, truth):
             result = result or (input in group)
 
     return result
-
-    
-# ------DEPRECATED FUNCTIONS------
-# def emphasize_spikes(signal, w=11):
-#     """
-#     Emphasizes main spikes by comparing the middle value to its neighbors.
-#     Smaller nearby spikes are suppressed.
-#     """
-#     # Make sure window size is odd
-#     if w % 2 == 0:
-#         w += 1
-
-#     # Build kernel: middle = 1, others = -1/(w-1)
-#     kernel = np.ones(w) * (-1/ (w - 1))
-#     kernel[w // 2] = 1
-
-#     # Convolve
-#     enhanced = convolve1d(signal, kernel, mode='reflect')
-#     enhanced = np.clip(enhanced, 0, None)
-#     return enhanced
-
-# def clean_noise(imgs):
-#     max_pixels_count = 0
-#     imgs_char_ranges = []
-#     for img in imgs:
-#         img = np.mean(img,axis=2)
-#         col_values = np.sum(img, axis=0)
-
-#         left = True
-#         prev = None
-#         char_ranges = []
-#         for i in range(len(col_values) - 1):
-#             if left and (col_values[i] == 0 and col_values[i + 1] > 0):
-#                 prev = i
-#                 left = False
-#             elif not left and (col_values[i] > 0 and col_values[i + 1] == 0):
-#                 char_ranges.append([prev, i + 1])
-#                 left = True
-#                 max_pixels_count = max(max_pixels_count, np.sum(np.where(img[:, prev:i + 1] != 0, 1, 0)))
-#         imgs_char_ranges.append(char_ranges)
-        
-#     fin_images = []
-#     for i in range(len(imgs_char_ranges)):
-#         if len(imgs_char_ranges[i]) == 1:
-#             fin_images.append(imgs[i])
-#             continue
-#         chars_ranges = imgs_char_ranges[i]
-#         # Create new images based on the true_chars_col_range
-#         for start, end in chars_ranges:
-#             pixel_count = np.sum(np.where(np.mean(imgs[i][:, start:end + 1, :], axis=2) != 0, 1, 0))
-#             if pixel_count < max_pixels_count / 5:
-#                 # show_img(imgs[i][:, start:end + 1, :], title="Filtered noise")
-#                 continue
-#             # Create a black background image
-#             char_img = np.zeros_like(imgs[i])
-#             char_img[:, start:end + 1, :] = imgs[i][:, start:end + 1, :]
-#             fin_images.append(char_img)
-
-#     return fin_images

@@ -4,7 +4,6 @@ import torchvision.transforms as transforms
 import torch
 
 from utils import split_into_char_images, is_char_correct_with_allowance
-# Add your Neural Network here (if using NN)
 char_classes = {
     "0": 0,
     "1": 1,
@@ -77,7 +76,7 @@ class ImageSequenceClassifier(nn.Module):
         # x: [B, N, E], Project to embedding dimension
         tokens = self.proj(features)
 
-        # ---- Self-attention with mask ----
+        # Self-attention with mask
         # key_padding_mask: shape [B, N], True = PAD
         key_padding_mask = None
         if mask is not None:
@@ -139,7 +138,7 @@ class SpatialTransformer(nn.Module):
     def __init__(self, input_channel=1):
         super(SpatialTransformer, self).__init__()
 
-        # --- Localization network (small CNN) ---
+        # Localization network (small CNN)
         self.localization = nn.Sequential(
             nn.Conv2d(input_channel, 8, kernel_size=7),
             nn.MaxPool2d(2, stride=2),
@@ -152,7 +151,7 @@ class SpatialTransformer(nn.Module):
         # Compute the flattened size automatically using dummy input
         self.fc_input_dim = self._get_fc_input_dim(input_channel)
         
-        # --- Regressor for 2x3 affine matrix ---
+        # Regressor for 2x3 affine matrix
         self.fc_loc = nn.Sequential(
             nn.Linear(self.fc_input_dim, 32),
             nn.ReLU(True),
@@ -185,7 +184,7 @@ class SpatialTransformer(nn.Module):
 class Featuriser(nn.Module):
     def __init__(self, input_channel, output_channel):
         super().__init__()
-        self.stn = SpatialTransformer(input_channel=input_channel)  # ← Added STN
+        self.stn = SpatialTransformer(input_channel=input_channel)  # STN
         
         self.features = nn.Sequential(
             ConvBlock(input_channel, 32),
@@ -201,8 +200,7 @@ class Featuriser(nn.Module):
         )
 
     def forward(self, x):
-         # --- Apply STN first ---
-        x = self.stn(x)
+        x = self.stn(x) # Apply STN first
         
         x = self.features(x)
         # (B*N, C, H, W) -> (B*N, C*H*W)

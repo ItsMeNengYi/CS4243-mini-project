@@ -14,7 +14,7 @@ os.makedirs(char_dir, exist_ok=True)
 st.set_page_config(layout="wide")
 def main():
     if 'data' not in st.session_state:
-        # --- 1. Load Model ---
+        # Load Model
         model_path = "char_classification_transformer_model.pth"
         net = torch.load(model_path, weights_only=False, map_location=torch.device('cpu'))
 
@@ -24,14 +24,14 @@ def main():
         wrong_count = 0
         wrong_count_with_allowance = 0
         images_count = 0
-        # Loop through all png in train/
+        # Loop through all png in test folder
         for (root,dirs,files) in os.walk('test/',topdown=True):
             for file in tqdm(files, desc="Loading images"):
                 if file.endswith('.png'):
                     if file[1] == "_":
                         os.remove(os.path.join(root, file))
                         continue
-                    if len(file.split("-")[1].split(".png")[0]) != 1: # remove any images marked wrong (train data)
+                    if len(file.split("-")[1].split(".png")[0]) != 1: # remove any images marked wrong (if using marked train data)
                         continue
                     img_path = os.path.join(root, file)
                     img = cv2.imread(img_path)
