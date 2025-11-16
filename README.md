@@ -1,15 +1,29 @@
-Download image from google drive and save in train/
+# CS4243 Mini Project: CAPTCHA Prediction with Artificial Neural Networks
+### Team Members: 
+Gan Ren Yick
+Lee Ze Hao
+Edwin Wong Jan Chung
+Teo Choon Keong 
 
-## Usage
-```bash
-python -m venv my_env
+### Preprocessing
+Preprocessing (line removal, character image splitting and processing) are defined in utils.py.
 
-my_env\Scripts\activate # Windows
-            or
-source my_env/bin/activate # Linux/MacOS
+### Training Data
+Prepare data from the "train" folder in the source data drive [https://drive.google.com/drive/folders/1JikBA_bt7HwUYge73WuohRibamdsBTcC]. Bad data can be labelled by appending "badwrong" "badcrop" or "badmiss" at the end of the file name, and will be ignored during data generation.   
 
-pip install -r requirements.txt
+Run the classifier_model_train_data_generator.ipynb notebook to generate the training data for the ANN.
 
-# Run data viewer
-streamlit run utils.py
-```
+Data augmentation is defined in the PyTorch Dataset later.
+
+### Model Structure
+Model structure is defined in model.py.
+
+### Model Training
+Dataset, DataLoader, training loop are defined in classifier_model_training.ipynb.
+
+### Model Evaluation and Metrics
+Final model evaluation and metrics can be performed using the classifier_model_test_eval.ipynb notebook.  
+Full CAPTCHA-level and character-level metrics are provided.
+
+
+
