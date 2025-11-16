@@ -27,6 +27,6 @@ Full CAPTCHA-level and character-level metrics are provided.
 
 ### Visualization
 (Activate Python environment first, run from project folder)   
-Run `streamlit run streamlit_all_captchas.py` to display all captcha predictions from the test set.
+Run `streamlit run streamlit_all_captchas.py` to display all captcha predictions from the test set.            
 Run `streamlit run streamlit_only_wrong_captchas.py` to display all the wrongly predicted captchas from the test set.   
 
